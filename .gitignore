@@ -3,3 +3,14 @@
 /testes.ipynb
 .env
 test*
+__pycache__
+# Ignorar arquivos de teste e notebooks
+*.ipynb_checkpoints
+# Ignorar arquivos de ambiente virtual
+*.pyc
+# Ignorar arquivos de cache do Python
+*.pyo
+# Ignorar arquivos de cache do Python
+*.pyd
+# Ignorar arquivos de cache do Python
+# Ignorar arquivos de cache do Python
