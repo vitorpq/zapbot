@@ -2,6 +2,15 @@
 
 ZapBot é uma aplicação simples construída com Streamlit para enviar mensagens em massa via WhatsApp. Ele permite que os usuários façam upload de um arquivo Excel contendo nomes e números de celular, digitem uma mensagem personalizada e enviem essa mensagem para cada contato listado.
 
+## ToDo
+- Modularização de código
+    - api_client.py - Funções da API
+    - utils.py - clean_phone, formatação de mensagens
+    - app.py - stream UI
+    - config.py - URL, SESSION_NAME, TIMEOUTS
+- Incluir gatilho para eventos 
+- Respostas automáticas aos clientes
+
 ## Funcionalidades
 
 - **Interface Web Interativa:** Construída com Streamlit para fácil utilização.

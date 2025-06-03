@@ -3,6 +3,7 @@
 /testes.ipynb
 .env
 test*
+
 __pycache__
 # Ignorar arquivos de teste e notebooks
 *.ipynb_checkpoints
