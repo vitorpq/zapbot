@@ -1,101 +1,140 @@
 # %%
-import streamlit as st
-import requests
-import json
-import pandas as pd
-import time
+import streamlit as st  # Para criar a interface web interativa
+import requests         # Para fazer requisições HTTP para a API do WhatsApp
+import json             # Para trabalhar com dados JSON (embora não usado explicitamente para dumps/loads nesta versão, requests.post(json=payload) o utiliza internamente)
+import pandas as pd     # Para ler e manipular dados de arquivos Excel
+import time             # Para adicionar pausas entre as mensagens
 
+# URL base da API do WhatsApp. Substitua se sua API estiver em um endereço diferente.
 URL = "http://localhost:3000/api/"
 
-# %% Set up Streamlit app
+# %% Configuração inicial do aplicativo Streamlit
+# Define o título da aba do navegador, o ícone e o layout da página.
 st.set_page_config(page_title="ZapBot", page_icon=":robot_face:", layout="wide")
+# Título principal exibido na página
 st.title("ZapBot - WhatsApp Bot")
-st.markdown("This is a simple WhatsApp bot that can send messages to a phone number.")
+# Descrição breve do aplicativo
+st.markdown("WhatsApp Bot criado para minhas tarefas diárias.")
+
+# Cabeçalho para a seção de configuração na barra lateral
 st.sidebar.header("Configuration")
+# Nome da sessão a ser usada nas chamadas da API. Pode ser configurável se necessário.
 SESSION_NAME = "default"
 
+# Componente para upload de arquivo na barra lateral, aceitando apenas arquivos .xlsx
 uploaded_file = st.sidebar.file_uploader("Upload Excel File", type=["xlsx"])
+# Área de texto na barra lateral para o usuário digitar a mensagem
 message = st.sidebar.text_area(
     "Message",
     placeholder="Digite sua mensagem aqui. Você pode usar a formatação do WhatsApp: *negrito*, _itálico_, ~riscado~, ```monoespaçado```.",
-    height=200
+    height=200  # Define a altura da caixa de texto em pixels
 )
+# Componente para selecionar o intervalo de tempo na barra lateral
+interval_options = {
+    "10 segundos": 10,
+    "20 segundos": 20,
+    "30 segundos": 30,
+}
+# Componente para selecionar o intervalo de tempo na barra lateral usando botões de rádio
+selected_interval_label = st.sidebar.radio(
+    "Intervalo entre mensagens:",
+    options=list(interval_options.keys()),
+    index=2  # Padrão para "30 segundos"
+)
+interval_seconds = interval_options[selected_interval_label]
 
-# %% Function to check if a phone number exists
+# %% Lógica principal: processamento do arquivo e envio de mensagens
+# Verifica se um arquivo foi carregado pelo usuário
 if uploaded_file is not None:
+    # Lê o arquivo Excel para um DataFrame do pandas
     df = pd.read_excel(uploaded_file)
-    st.write("Data from Excel:")
-    st.dataframe(df)
+    st.write("Data from Excel:")  # Exibe um título antes da tabela
+    st.dataframe(df)  # Exibe o conteúdo do DataFrame na interface
 
+    # Botão na barra lateral para iniciar o envio das mensagens
     if st.sidebar.button("Send Messages from Excel"):
+        # Verifica se o campo de mensagem não está vazio
         if message:
+            # Verifica se as colunas 'nome' e 'celular' existem no DataFrame
             if 'nome' in df.columns and 'celular' in df.columns:
+                # Itera sobre cada linha do DataFrame
                 for index, row in df.iterrows():
-                    nome = row['nome'].capitalize()
+                    # Extrai o nome e capitaliza a primeira letra
+                    nome = str(row['nome']).capitalize()
+                    # Extrai o número de celular e converte para string
                     phone_number = str(row['celular'])
+                    # Limpa o número de telefone removendo caracteres comuns
                     phone_number = phone_number.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-                    # Check if phone number starts with 55 (Brazil country code)
+
+                    # Adiciona o código do país (55 para Brasil) se não estiver presente
                     if not phone_number.startswith('55'):
                         phone_number = '55' + phone_number
 
-                    # Check if phone number exists
+                    # Monta a URL para verificar a existência do contato na API
                     url_check = URL + f"contacts/check-exists?phone={phone_number}&session={SESSION_NAME}"
-                    response_check = requests.get(url_check)
-                    if response_check.status_code == 200:
-                        contact_info = response_check.json()
-                        if contact_info.get('numberExists'):
-                            chat_id = contact_info.get('chatId')
-                            if chat_id:
-                                # Send Message
-                                send_url = URL + "sendText"
-                                payload = {
-                                    "session": SESSION_NAME,
-                                    "chatId": chat_id,
-                                    "text": f"Boa noite, {nome}! \n {message}"
-                                }
-                                response = requests.post(send_url, json=payload)
+                    try:
+                        # Faz a requisição GET para verificar o contato
+                        response_check = requests.get(url_check, timeout=10) # Adicionado timeout
+                        # Verifica se a requisição foi bem-sucedida (status code 200)
+                        if response_check.status_code == 200:
+                            contact_info = response_check.json()
+                            # Verifica se o número existe e se o chatId foi retornado
+                            if contact_info.get('numberExists'):
+                                chat_id = contact_info.get('chatId')
+                                if chat_id:
+                                    # Monta a URL para enviar a mensagem de texto
+                                    send_url = URL + "sendText"
+                                    # Prepara o payload (dados) da mensagem em formato JSON
+                                    payload = {
+                                        "session": SESSION_NAME,
+                                        "chatId": chat_id,
+                                        "text": f"Boa noite, {nome}! \n {message}" # Mensagem personalizada
+                                    }
+                                    try:
+                                        # Faz a requisição POST para enviar a mensagem
+                                        response = requests.post(send_url, json=payload, timeout=15) # Adicionado timeout
 
-                                # Check for any 2xx status code to indicate success
-                                if 200 <= response.status_code < 300:
-                                    # Displaying part of the response can be helpful, but the full JSON might be too verbose for a success message.
-                                    st.success(f"Message processed for {nome} ({phone_number}). API Status: {response.status_code}. Ack: {response.json().get('ack', 'N/A')}")
+                                        # Verifica se a API processou a mensagem com sucesso (status code 2xx)
+                                        if 200 <= response.status_code < 300:
+                                            response_data = response.json()
+                                            st.success(f"Message processed for {nome} ({phone_number}). API Status: {response.status_code}. Ack: {response_data.get('ack', 'N/A')}")
+                                        else:
+                                            st.error(f"Error sending message to {nome} ({phone_number}). Status: {response.status_code}, Response: {response.text}")
+                                    except requests.exceptions.RequestException as e:
+                                        st.error(f"Request failed for sending message to {nome} ({phone_number}): {e}")
                                 else:
-                                    st.error(f"Error sending message to {nome} ({phone_number}). Status: {response.status_code}, Response: {response.text}")
+                                    st.warning(f"Could not retrieve chat ID for {phone_number} ({nome}) even though number exists.")
                             else:
-                                st.warning(f"Could not retrieve chat ID for {phone_number} ({nome}) even though number exists.")
+                                st.warning(f"Phone number {phone_number} does not exist for {nome}.")
                         else:
-                            st.warning(f"Phone number {phone_number} does not exist for {nome}.")
-                    else:
-                        st.error(f"Error checking phone number for {nome} ({phone_number}). Response: {response_check.text}")
+                            st.error(f"Error checking phone number for {nome} ({phone_number}). Status: {response_check.status_code}, Response: {response_check.text}")
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"Request failed for checking phone {nome} ({phone_number}): {e}")
 
-                    time.sleep(30)  # Wait 30 seconds
 
-                st.success("All messages sent (or attempted)!")
+                    # Pausa por 30 segundos entre o envio de cada mensagem para evitar bloqueios/sobrecarga
+                    time.sleep(interval_seconds)
+
+                st.success("All messages sent (or attempted)!") # Mensagem final após o loop
             else:
+                # Aviso se as colunas necessárias não forem encontradas no Excel
                 st.error("The Excel file must contain columns named 'nome' and 'celular'.")
         else:
+            # Aviso se o campo de mensagem estiver vazio
             st.warning("Please enter a message to send.")
 else:
+    # Informação para o usuário caso nenhum arquivo tenha sido carregado
     st.info("Please upload an Excel file with 'nome' and 'celular' columns.")
-# %%
-# This code is a simple Streamlit app that allows users to check if a WhatsApp phone number exists and send messages to it.
-# It uses the requests library to interact with a local API that handles WhatsApp messaging.
-# The app has a sidebar for configuration where users can input a phone number and a message.
-# The main area displays the status of the phone number and allows sending messages if the number exists.
-# The app is designed to be user-friendly and provides feedback on the actions taken.
-# The code is structured to handle user input, API requests, and display results in a clear manner.
-# The app is intended for use with a WhatsApp bot backend that supports the specified API endpoints.
-# The app is built using Streamlit, a popular framework for creating web applications in Python.
-# The app is designed to be run locally and requires the backend API to be running on port 8000.
-# The app is a demonstration of how to integrate WhatsApp messaging capabilities into a web application using Python.
-# The app can be extended with additional features such as message history, error handling, and user authentication.
-# The app is a starting point for building more complex WhatsApp bot applications.
-# The app can be deployed to a web server or cloud platform for wider accessibility.
-# The app is open-source and can be modified to suit specific use cases or requirements.
-# The app is a practical example of using Streamlit for building interactive web applications with Python.
-# The app is a useful tool for developers and businesses looking to integrate WhatsApp messaging into their workflows.
-# The app can be used for customer support, notifications, and automated messaging.
-# The app is a simple yet effective way to demonstrate the capabilities of WhatsApp bots.
-# The app is a great starting point for anyone interested in building WhatsApp bots with Python.
-# The app is designed to be easy to use and requires minimal setup.
-# The app is a practical example of how to use Streamlit for building web applications that interact with external APIs.
+
+
+# %% Sidebar infos
+
+st.sidebar.header("Developer")
+st.sidebar.markdown(
+    ":o: [Vitor Em.](https://github.com/vitorpq)"
+)
+st.sidebar.header("Tech stack")
+
+st.sidebar.markdown(
+    ":violet-badge[Python] :red-badge[Streamlit] :blue-badge[Docker] :green-badge[WAHA API] :gray-badge[Requests] :orange-badge[Pandas]"
+)

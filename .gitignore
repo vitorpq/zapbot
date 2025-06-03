@@ -1,3 +1,5 @@
 /.venv
 /numeros.xlsx
 /testes.ipynb
+.env
+test*
